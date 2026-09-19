@@ -44,6 +44,8 @@ where $T_e$ is the number of tokens routed to expert $e$, and $\bar{T}$ is the e
 
 MoonEP's contract with a training or inference framework is **one contiguous symmetric-memory weight tensor per expert projection, plus a planner-produced `cu_seqlens`**. The VM group GEMM consumes a single `[E+B, H, H']` weight tensor; `cu_seqlens[E+B]` (returned by `dispatch`) selects which expert rows are active for the current step.
 
+Both projection dimensions of that tensor are constrained by the current implementation: **`H` and `H'` must each be a multiple of 128.** `128 × 256` satisfies this; `2880 × 4096` does not, because `H = 2880` is a multiple of 8 but not of 128. These are tile-shape requirements of the current kernels — `prefetch_weight` and `reduce_grad` tile at 128, and `combine` accumulates `H` with 128 threads — not memory-contiguity requirements. A contiguous range that violates them still maps correctly and then fails an assertion inside the kernel launch. For the packed (`uint8`) and retiled quantization paths, the requirement applies to the physical tensor dimensions actually passed to those kernels, which are not necessarily the model's logical `H` and `H'`.
+
 #### Weight buffer
 
 <img src="figure/weight_buffer.png" alt="MoonEP weight buffer layout" width="1000">
