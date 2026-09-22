@@ -14,20 +14,12 @@ def generate_topk_routing(S, K, E, R, bias_ratio, dev, seed, rank=0):
       2   -> heavy skew
       5   -> near-degenerate routing
 
-    Seeding differs by branch:
-
-    - `bias_ratio == 0.0` (balanced): the round-robin expert permutation is
-      drawn from the rank-seeded generator, so `rank` selects the permutation
-      and nothing is ever drawn from the seed-seeded generator, which leaves
-      `seed` without effect on this branch.
-    - biased: `seed` seeds the shared expert-logit distribution and `rank`
-      seeds the per-token draws, so hot experts line up across ranks while
-      per-token samples stay independent. This is bit-for-bit identical to the
-      biased-routing generator used in training when run on the same cuda
-      device.
-
-    Reproducibility holds within one device backend and software environment;
-    CPU and CUDA streams are not expected to match.
+    `seed` seeds rank-shared state (the expert-logit distribution and the
+    round-robin expert permutation); `rank` seeds the per-token draws. This
+    is bit-for-bit identical to the biased-routing generator used in
+    training when run on the same cuda device: shared generator <- base
+    seed, inner generator <- ep rank, so hot experts line up across ranks
+    while per-token draws stay independent.
     """
     g_shared = torch.Generator(device=dev).manual_seed(seed)
     g_local = torch.Generator(device=dev).manual_seed(rank)
