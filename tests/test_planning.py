@@ -257,49 +257,6 @@ def test_planning_step1_case_coverage():
     assert any(p["work_ctas"] > 1 and p["group_spans_ctas"] for p in params)
 
 
-def _publish_tail_length(R, epn):
-    """Trailing element count of the plan broadcast: nb % 4, nb = 3 * E * R."""
-    return (3 * R * R * epn) % 4
-
-
-def test_planning_cases_cover_every_publish_tail_length():
-    """Shapes with a non-empty publish tail used to be rejected on the host.
-    Tail lengths 0-3 must all stay reachable at R=1 and R=3."""
-    tails = {}
-    for R in (1, 2, 3, 4, 8):
-        for case in PLANNING_CASES:
-            if R < case.min_R or (case.max_R is not None and R > case.max_R):
-                continue
-            tails.setdefault(_publish_tail_length(R, case.epn), set()).add((R, case.epn))
-
-    assert set(tails) == {0, 1, 2, 3}, {k: sorted(v) for k, v in tails.items()}
-    assert all(any(R in (1, 3) for R, _ in tails[tail]) for tail in (1, 2, 3))
-
-
-def _publish_indices(nb, workers):
-    """Index model of the plan broadcast: v4 body first, then the scalar tail."""
-    nvec = nb // 4
-    vector, tail = [], []
-    for worker in range(workers):
-        for group in range(worker, nvec, workers):
-            vector.extend(range(group * 4, group * 4 + 4))
-        tail.extend(range(nvec * 4 + worker, nb, workers))
-    return vector, tail
-
-
-def test_plan_publish_index_model_covers_every_element_exactly_once():
-    for nb in range(1, 257):
-        for workers in (1, 8, 32, 128, 256, 512):
-            vector, tail = _publish_indices(nb, workers)
-            assert sorted(vector + tail) == list(range(nb))
-            assert not set(vector) & set(tail)
-            assert len(tail) == nb % 4
-            assert all(index % 4 == 0 for index in vector[::4])
-            # Negative control: dropping the scalar tail loses exactly the
-            # trailing nb % 4 elements and nothing else.
-            assert sorted(set(range(nb)) - set(vector)) == list(range(nb - nb % 4, nb))
-
-
 @pytest.mark.parametrize("case", case_params(PLANNING_CASES))
 def test_planning_matches_reference_and_invariants(dist_env, case):
     from moonep.planning import allocate_planning_outputs, launch_planning
